@@ -101,6 +101,7 @@ function normalizeSteamLive(j) {
       game_time: sb.duration ?? 0,
       radiant_lead: gold(0) - gold(1),
       spectators: g.spectators || 0,
+      roshan_respawn_timer: sb.roshan_respawn_timer,
       tower_state_radiant: sb.radiant?.tower_state,
       tower_state_dire: sb.dire?.tower_state,
       barracks_state_radiant: sb.radiant?.barracks_state,

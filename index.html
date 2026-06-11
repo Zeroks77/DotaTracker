@@ -394,8 +394,9 @@ const S = {
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
-/* Statische Version ohne Server: spricht OpenDota direkt an.
-   Die Worker-Version nutzt stattdessen den eigenen Cache-Proxy + Steam. */
+/* GitHub-Pages-Version ohne Server: spricht OpenDota direkt an.
+   Volle Liveticker-Daten (Karte/Items/Türme) liefert nur die Steam-Quelle
+   über den Cloudflare-Worker — siehe worker/README-CLOUDFLARE.md im Repo. */
 const OD = "https://api.opendota.com/api";
 async function od(path) {
   const r = await fetch(OD + path);
@@ -428,7 +429,7 @@ async function api(path) {
   if (path === "/items") {
     const j = await od("/constants/items");
     const map = {};
-    for (const k in j) { const it = j[k]; if (it && it.id) map[it.id] = { dname: it.dname || k, img: it.img }; }
+    for (const key in j) { const it = j[key]; if (it && it.id) map[it.id] = { dname: it.dname || key, img: it.img }; }
     return map;
   }
   if (path.startsWith("/match/")) return od("/matches/" + path.slice(7));
