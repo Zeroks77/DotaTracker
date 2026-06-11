@@ -70,7 +70,14 @@ function normalizeSteamLive(j) {
   const games = j?.result?.games || [];
   return games.map(g => {
     const sb = g.scoreboard || {};
-    const mk = (ps, team) => (ps || []).map(p => ({ account_id: p.account_id, hero_id: p.hero_id, team, net_worth: p.net_worth }));
+    const mk = (ps, team) => (ps || []).map(p => ({
+      account_id: p.account_id, hero_id: p.hero_id, team,
+      net_worth: p.net_worth, level: p.level,
+      kills: p.kills, deaths: p.death ?? p.deaths, assists: p.assists,
+      respawn_timer: p.respawn_timer,
+      position_x: p.position_x, position_y: p.position_y,
+      items: [p.item0, p.item1, p.item2, p.item3, p.item4, p.item5],
+    }));
     let players = [...mk(sb.radiant?.players, 0), ...mk(sb.dire?.players, 1)];
     if (!players.length) {
       players = (g.players || []).filter(p => p.team === 0 || p.team === 1)
@@ -94,6 +101,10 @@ function normalizeSteamLive(j) {
       game_time: sb.duration ?? 0,
       radiant_lead: gold(0) - gold(1),
       spectators: g.spectators || 0,
+      tower_state_radiant: sb.radiant?.tower_state,
+      tower_state_dire: sb.dire?.tower_state,
+      barracks_state_radiant: sb.radiant?.barracks_state,
+      barracks_state_dire: sb.dire?.barracks_state,
       players,
     };
   });
@@ -204,6 +215,18 @@ const handlers = {
   async heroStats() {
     return cached("heroStats", 3600, () => getJSON(`${OD}/heroStats`, 25000));
   },
+
+  async items() {
+    return cached("items", 24 * 3600, async () => {
+      const j = await getJSON(`${OD}/constants/items`, 25000);
+      const map = {};
+      for (const key in j) {
+        const it = j[key];
+        if (it && it.id) map[it.id] = { dname: it.dname || key, img: it.img };
+      }
+      return map;
+    });
+  },
 };
 
 /* ---------- Worker-Einstieg ---------- */
@@ -227,6 +250,7 @@ export default {
       if (p === "/api/proPlayers") return json(await handlers.proPlayers());
       if (p === "/api/leagues") return json(await handlers.leagues());
       if (p === "/api/heroStats") return json(await handlers.heroStats());
+      if (p === "/api/items") return json(await handlers.items());
       const matchM = p.match(/^\/api\/match\/(\d+)$/);
       if (matchM) return json(await handlers.match(env, matchM[1]));
       if (p.startsWith("/api/")) return json({ error: "Unbekannter Endpunkt" }, 404);

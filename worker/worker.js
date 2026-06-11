@@ -70,7 +70,14 @@ function normalizeSteamLive(j) {
   const games = j?.result?.games || [];
   return games.map(g => {
     const sb = g.scoreboard || {};
-    const mk = (ps, team) => (ps || []).map(p => ({ account_id: p.account_id, hero_id: p.hero_id, team, net_worth: p.net_worth }));
+    const mk = (ps, team) => (ps || []).map(p => ({
+      account_id: p.account_id, hero_id: p.hero_id, team,
+      net_worth: p.net_worth, level: p.level,
+      kills: p.kills, deaths: p.death ?? p.deaths, assists: p.assists,
+      respawn_timer: p.respawn_timer,
+      position_x: p.position_x, position_y: p.position_y,
+      items: [p.item0, p.item1, p.item2, p.item3, p.item4, p.item5],
+    }));
     let players = [...mk(sb.radiant?.players, 0), ...mk(sb.dire?.players, 1)];
     if (!players.length) {
       players = (g.players || []).filter(p => p.team === 0 || p.team === 1)
@@ -94,6 +101,10 @@ function normalizeSteamLive(j) {
       game_time: sb.duration ?? 0,
       radiant_lead: gold(0) - gold(1),
       spectators: g.spectators || 0,
+      tower_state_radiant: sb.radiant?.tower_state,
+      tower_state_dire: sb.dire?.tower_state,
+      barracks_state_radiant: sb.radiant?.barracks_state,
+      barracks_state_dire: sb.dire?.barracks_state,
       players,
     };
   });
@@ -204,6 +215,18 @@ const handlers = {
   async heroStats() {
     return cached("heroStats", 3600, () => getJSON(`${OD}/heroStats`, 25000));
   },
+
+  async items() {
+    return cached("items", 24 * 3600, async () => {
+      const j = await getJSON(`${OD}/constants/items`, 25000);
+      const map = {};
+      for (const key in j) {
+        const it = j[key];
+        if (it && it.id) map[it.id] = { dname: it.dname || key, img: it.img };
+      }
+      return map;
+    });
+  },
 };
 
 /* ---------- Worker-Einstieg ---------- */
@@ -227,6 +250,7 @@ export default {
       if (p === "/api/proPlayers") return json(await handlers.proPlayers());
       if (p === "/api/leagues") return json(await handlers.leagues());
       if (p === "/api/heroStats") return json(await handlers.heroStats());
+      if (p === "/api/items") return json(await handlers.items());
       const matchM = p.match(/^\/api\/match\/(\d+)$/);
       if (matchM) return json(await handlers.match(env, matchM[1]));
       if (p.startsWith("/api/")) return json({ error: "Unbekannter Endpunkt" }, 404);
@@ -439,6 +463,28 @@ canvas{width:100%;height:90px;display:block;margin:10px 0 4px}
 .skeleton div:last-child{margin-bottom:0;width:60%}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
+/* ---------- Live-Detail: Karte, Objectives, Items ---------- */
+.live-grid{display:grid;grid-template-columns:minmax(260px,340px) 1fr;gap:18px;align-items:start}
+@media (max-width:760px){.live-grid{grid-template-columns:1fr}}
+.minimap{width:100%;aspect-ratio:1;border:1px solid var(--line);border-radius:6px;display:block;background:#0a0d09}
+.minimap .hero-dot{transition:x .9s linear, y .9s linear}
+.obj-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.obj-side{border:1px solid var(--line);border-radius:6px;padding:10px 12px;font-size:12.5px}
+.obj-side h4{font-family:'Cinzel',serif;font-size:13px;letter-spacing:.06em;margin-bottom:8px}
+.obj-side.radiant h4{color:var(--radiant)} .obj-side.dire h4{color:var(--dire)}
+.obj-row{display:flex;align-items:center;gap:6px;margin-bottom:5px;color:var(--muted)}
+.obj-row b{color:var(--parchment);width:34px;font-weight:600}
+.pip{width:11px;height:11px;border-radius:2px;background:var(--gold);display:inline-block;box-shadow:0 0 4px rgba(201,162,75,.4)}
+.pip.down{background:#3a3344;box-shadow:none;opacity:.5}
+.pip.rax{border-radius:50%}
+.item-imgs{display:flex;gap:2px;flex-wrap:wrap}
+.item-imgs img,.item-imgs i{width:26px;height:19px;object-fit:cover;border-radius:2px;border:1px solid var(--line);background:var(--panel2)}
+.item-imgs i{display:inline-block}
+tr.dead td{opacity:.45}
+tr.dead .respawn{color:var(--dire);font-family:'JetBrains Mono',monospace;font-size:11px}
+.live-note{font-size:12.5px;color:var(--muted);border:1px dashed var(--line);border-radius:6px;padding:10px 12px;margin-top:12px;line-height:1.5}
+.lvl{font-family:'JetBrains Mono',monospace;color:var(--gold)}
+
 .empty,.error{text-align:center;color:var(--muted);padding:40px 16px;border:1px dashed var(--line);border-radius:6px;font-size:14px}
 .error{color:var(--dire);border-color:var(--dire)}
 .refresh-note{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted);text-transform:none;letter-spacing:0}
@@ -604,10 +650,12 @@ document.addEventListener("click", e => {
    Zustand, Helfer
 ============================================================ */
 const S = {
-  heroes: null, proPlayers: null, heroStats: null,
+  heroes: null, proPlayers: null, heroStats: null, items: null,
   proMatches: [], leagues: null, liveTimer: null, matchCache: {},
   matchFilter: { kind: "alle", league: "", search: "" },
   prevLive: {}, // match_id -> { score, leadSign } für Sound/Animation-Trigger
+  liveGames: {}, // match_id -> aktuelles Live-Spielobjekt
+  liveDetailId: null, liveDetailTimer: null,
 };
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -687,6 +735,8 @@ async function renderLive() {
     liveLoaded = true;
     const league = data.league || [];
     const pub = data.pub || [];
+    S.liveGames = {};
+    for (const g of league.concat(pub)) S.liveGames[g.match_id] = g;
 
     let html = \`<div class="section-title">Liga-Spiele live
       <span class="refresh-note">Quelle: \${data.source === "steam" ? "Steam Web API" : "OpenDota"} · Auto-Refresh 30 s · \${new Date().toLocaleTimeString("de-DE")}</span></div>\`;
@@ -856,9 +906,178 @@ function matchRow(m) {
 }
 
 /* ============================================================
+   LIVE-DETAIL — Karte, Items, Objectives (Steam-Quelle)
+============================================================ */
+async function openLiveDetail(id) {
+  const dlg = $("#matchModal");
+  S.liveDetailId = id;
+  $("#modalBody").innerHTML = skeletons(3);
+  dlg.showModal();
+  await Promise.all([loadHeroes(), loadProPlayers(), loadItems()]);
+  renderLiveDetail();
+  clearInterval(S.liveDetailTimer);
+  S.liveDetailTimer = setInterval(async () => {
+    try {
+      const data = await api("/live");
+      S.liveGames = {};
+      for (const g of (data.league || []).concat(data.pub || [])) S.liveGames[g.match_id] = g;
+      if (S.liveGames[S.liveDetailId]) renderLiveDetail();
+      else {
+        clearInterval(S.liveDetailTimer);
+        $("#modalBody").innerHTML += \`<div class="live-note">Das Spiel ist beendet — die volle Statistik erscheint in Kürze im Spiele-Tab.</div>\`;
+      }
+    } catch {}
+  }, 15000);
+}
+document.getElementById("matchModal").addEventListener("close", () => {
+  clearInterval(S.liveDetailTimer); S.liveDetailId = null;
+});
+
+function renderLiveDetail() {
+  const g = S.liveGames[S.liveDetailId];
+  if (!g) return;
+  $("#modalTitle").textContent = \`🔴 \${g.team_name_radiant || "Radiant"} \${g.radiant_score ?? 0} : \${g.dire_score ?? 0} \${g.team_name_dire || "Dire"} · \${fmtClock(g.game_time)}\`;
+  const hasPos = (g.players || []).some(p => p.position_x != null);
+  const hasObj = g.tower_state_radiant != null;
+
+  $("#modalBody").innerHTML = \`
+    <div class="live-grid">
+      <div>
+        \${hasPos ? miniMapSVG(g) : \`<div class="empty" style="padding:24px">Spielerpositionen auf der Karte<br>liefert nur die Steam-Quelle.</div>\`}
+        \${hasObj ? objectivesHTML(g) : ""}
+      </div>
+      <div>
+        \${liveRosterHTML(g, 0)}
+        \${liveRosterHTML(g, 1)}
+      </div>
+    </div>
+    \${(!hasPos || !hasObj) ? \`<div class="live-note">ℹ️ Volle Ticker-Ansicht (Karte, Items, Türme) gibt es mit der Steam-Quelle:
+      Cloudflare-Worker deployen und <b>STEAM_API_KEY</b> setzen — Anleitung im Repo unter <b>worker/README-CLOUDFLARE.md</b>.
+      Aktuelle Quelle: \${g.source === "steam" ? "Steam" : "OpenDota (eingeschränkt)"}.</div>\` : ""}
+    <div class="goldlabel" style="margin-top:10px">Aktualisiert sich alle 15 s automatisch.</div>\`;
+}
+
+/* ---- Minimap: stilisierte Dota-Karte, Welt-Koordinaten ≈ ±8200 ---- */
+const TOWERS = {
+  // [x, y] in SVG-Koordinaten (0–100, y nach unten) je Bit der tower_state-Maske
+  // Bits 0–2: Top T1–T3, 3–5: Mid T1–T3, 6–8: Bot T1–T3, 9–10: Ancient-Türme
+  radiant: [[8,46],[8,62],[10,75], [40,60],[32,68],[24,76], [56,93],[39,93],[27,90], [17,84],[19,86]],
+  dire:    [[44,7],[61,7],[73,10], [60,40],[68,32],[76,24], [92,54],[92,38],[90,25], [83,16],[81,14]],
+};
+const ANCIENTS = { radiant: [14, 88], dire: [86, 12] };
+
+function worldToMap(x, y) {
+  const u = ((x + 8200) / 16400) * 100;
+  const v = 100 - ((y + 8200) / 16400) * 100;
+  return [Math.max(2, Math.min(98, u)), Math.max(2, Math.min(98, v))];
+}
+
+function miniMapSVG(g) {
+  const towers = side => {
+    const state = side === "radiant" ? g.tower_state_radiant : g.tower_state_dire;
+    if (state == null) return "";
+    return TOWERS[side].map(([x, y], bit) => {
+      const up = (state >> bit) & 1;
+      return \`<rect x="\${x - 1.6}" y="\${y - 1.6}" width="3.2" height="3.2" rx=".6"
+        fill="\${up ? (side === "radiant" ? "#5dbb63" : "#e05246") : "#332c3e"}" opacity="\${up ? 1 : .55}"/>\`;
+    }).join("");
+  };
+  const ancient = side => {
+    const [x, y] = ANCIENTS[side];
+    return \`<path d="M\${x} \${y - 3} L\${x + 3} \${y} L\${x} \${y + 3} L\${x - 3} \${y} Z"
+      fill="\${side === "radiant" ? "#5dbb63" : "#e05246"}" stroke="#c9a24b" stroke-width=".5"/>\`;
+  };
+  const heroes = (g.players || []).filter(p => p.position_x != null).map(p => {
+    const [u, v] = worldToMap(p.position_x, p.position_y);
+    const h = S.heroes[p.hero_id];
+    const dead = p.respawn_timer > 0;
+    const ring = p.team === 0 ? "#5dbb63" : "#e05246";
+    return \`<g class="hero-dot" opacity="\${dead ? .35 : 1}">
+      <circle cx="\${u}" cy="\${v}" r="3.6" fill="none" stroke="\${ring}" stroke-width=".9"/>
+      \${h ? \`<image href="\${imgUrl(h.img)}" x="\${u - 3}" y="\${v - 3}" width="6" height="6"
+        clip-path="circle(3px at 3px 3px)" preserveAspectRatio="xMidYMid slice"/>\` : ""}
+    </g>\`;
+  }).join("");
+
+  return \`<svg class="minimap" viewBox="0 0 100 100" role="img" aria-label="Live-Karte">
+    <defs>
+      <radialGradient id="radBase" cx="0" cy="1" r="1"><stop offset="0" stop-color="#16321a"/><stop offset="1" stop-color="transparent"/></radialGradient>
+      <radialGradient id="direBase" cx="1" cy="0" r="1"><stop offset="0" stop-color="#33161a"/><stop offset="1" stop-color="transparent"/></radialGradient>
+    </defs>
+    <rect width="100" height="100" fill="#121810"/>
+    <rect width="100" height="100" fill="url(#radBase)"/>
+    <rect width="100" height="100" fill="url(#direBase)"/>
+    <polygon points="0,16 16,0 100,84 84,100 0,16" fill="#1b2c33" opacity=".85"/>
+    <line x1="12" y1="88" x2="88" y2="12" stroke="#2a2433" stroke-width="3" opacity=".6"/>
+    <line x1="7" y1="80" x2="7" y2="20" stroke="#2a2433" stroke-width="3" opacity=".5"/>
+    <line x1="20" y1="93" x2="80" y2="93" stroke="#2a2433" stroke-width="3" opacity=".5"/>
+    <line x1="93" y1="80" x2="93" y2="20" stroke="#2a2433" stroke-width="3" opacity=".5"/>
+    <line x1="20" y1="7" x2="80" y2="7" stroke="#2a2433" stroke-width="3" opacity=".5"/>
+    \${towers("radiant")}\${towers("dire")}
+    \${g.tower_state_radiant != null ? ancient("radiant") + ancient("dire") : ""}
+    \${heroes}
+  </svg>\`;
+}
+
+/* ---- Objectives: Türme & Barracken aus den Bitmasken ---- */
+function objectivesHTML(g) {
+  const pips = (state, bits, offset, rax) => Array.from({ length: bits }, (_, i) =>
+    \`<span class="pip \${rax ? "rax" : ""} \${((state >> (offset + i)) & 1) ? "" : "down"}"></span>\`).join("");
+  const sideBlock = (side, tState, bState) => \`
+    <div class="obj-side \${side}">
+      <h4>\${side === "radiant" ? "☀ " + esc(g.team_name_radiant || "Radiant") : "🌙 " + esc(g.team_name_dire || "Dire")}</h4>
+      <div class="obj-row"><b>Top</b>\${pips(tState, 3, 0)} <span style="margin-left:8px"></span>\${pips(bState, 2, 0, true)}</div>
+      <div class="obj-row"><b>Mid</b>\${pips(tState, 3, 3)} <span style="margin-left:8px"></span>\${pips(bState, 2, 2, true)}</div>
+      <div class="obj-row"><b>Bot</b>\${pips(tState, 3, 6)} <span style="margin-left:8px"></span>\${pips(bState, 2, 4, true)}</div>
+      <div class="obj-row"><b>Base</b>\${pips(tState, 2, 9)}</div>
+    </div>\`;
+  return \`<div class="obj-grid">
+    \${sideBlock("radiant", g.tower_state_radiant || 0, g.barracks_state_radiant || 0)}
+    \${sideBlock("dire", g.tower_state_dire || 0, g.barracks_state_dire || 0)}
+  </div>
+  <div class="goldlabel" style="text-align:left;margin-top:6px">▪ Türme (T1→T3) · ● Barracken (Nahkampf/Fernkampf) — dunkel = zerstört</div>\`;
+}
+
+/* ---- Roster: Spieler mit Level, KDA, Net Worth, Items ---- */
+function liveRosterHTML(g, team) {
+  const ps = (g.players || []).filter(p => p.team === team);
+  if (!ps.length) return "";
+  const name = team === 0 ? (g.team_name_radiant || "Radiant") : (g.team_name_dire || "Dire");
+  const hasDetail = ps.some(p => p.level != null);
+  return \`
+    <div class="section-title" style="margin-top:\${team ? "16px" : "0"}">\${team === 0 ? "☀" : "🌙"} \${esc(name)}</div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Spieler</th>\${hasDetail ? \`<th class="num">Lvl</th><th class="num">K/D/A</th><th class="num">Gold</th><th>Items</th>\` : ""}</tr></thead>
+      <tbody>\${ps.map(p => {
+        const n = playerName(p);
+        const dead = p.respawn_timer > 0;
+        const items = (p.items || []).map(it => {
+          const info = it && S.items && S.items[it];
+          return info ? \`<img src="\${imgUrl(info.img)}" alt="\${esc(info.dname || "")}" title="\${esc(info.dname || "")}" loading="lazy">\` : \`<i></i>\`;
+        }).join("");
+        return \`<tr class="\${dead ? "dead" : ""}">
+          <td><span class="player-cell">\${heroImg(p.hero_id)}
+            <span class="pn \${n.pro ? "pro" : ""}">\${esc(n.name)}</span>
+            \${dead ? \`<span class="respawn">☠ \${Math.ceil(p.respawn_timer)}s</span>\` : ""}</span></td>
+          \${hasDetail ? \`
+          <td class="num lvl">\${p.level ?? "–"}</td>
+          <td class="num">\${p.kills ?? 0}/\${p.deaths ?? 0}/\${p.assists ?? 0}</td>
+          <td class="num">\${fmtGold(p.net_worth || 0)}</td>
+          <td><span class="item-imgs">\${items}</span></td>\` : ""}
+        </tr>\`;
+      }).join("")}</tbody></table></div>\`;
+}
+
+/* ============================================================
    MATCH-DETAIL
 ============================================================ */
+async function loadItems() {
+  if (S.items) return;
+  try { S.items = await api("/items"); } catch { S.items = {}; }
+}
+
 async function openMatch(id, isLive) {
+  if (isLive && S.liveGames[id]) return openLiveDetail(id);
   const dlg = $("#matchModal");
   $("#modalTitle").textContent = "Match " + id;
   $("#modalBody").innerHTML = skeletons(3);
