@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AEGIS TICKER — Dota 2 Pro-Szene live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Barlow+Semi+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --abyss:#0c0a10; --panel:#16121c; --panel2:#1d1825; --line:#2c2535;
+  --parchment:#e9dfc6; --muted:#9b8fa8; --gold:#c9a24b;
+  --radiant:#5dbb63; --dire:#e05246; --dota-red:#a32c25;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scrollbar-color:var(--line) var(--abyss)}
+body{
+  background:var(--abyss); color:var(--parchment);
+  font-family:'Barlow Semi Condensed',sans-serif; font-size:15px; min-height:100vh;
+  background-image:radial-gradient(ellipse 80% 50% at 50% -10%, rgba(163,44,37,.18), transparent 60%);
+  overflow-x:hidden;
+}
+a{color:var(--gold)} button{font-family:inherit;cursor:pointer}
+
+/* ---------- Glut-Partikel im Hintergrund ---------- */
+.embers{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.embers span{
+  position:absolute;bottom:-10px;width:3px;height:3px;border-radius:50%;
+  background:var(--gold);opacity:0;filter:blur(.5px);
+  animation:rise linear infinite;
+}
+@keyframes rise{
+  0%{transform:translateY(0) translateX(0);opacity:0}
+  10%{opacity:.5} 90%{opacity:.15}
+  100%{transform:translateY(-105vh) translateX(var(--drift,20px));opacity:0}
+}
+
+/* ---------- Kopf ---------- */
+header{
+  border-bottom:1px solid var(--line); padding:18px 20px 0;
+  position:sticky;top:0;z-index:50;
+  background:rgba(12,10,16,.92);backdrop-filter:blur(8px);
+}
+.brand{display:flex;align-items:center;gap:14px;max-width:1100px;margin:0 auto}
+.brand svg{flex:none;filter:drop-shadow(0 0 6px rgba(201,162,75,.35))}
+.brand h1{font-family:'Cinzel',serif;font-weight:900;font-size:clamp(20px,3.5vw,28px);letter-spacing:.14em}
+.brand h1 em{font-style:normal;color:var(--gold)}
+.brand p{color:var(--muted);font-size:13px;letter-spacing:.04em}
+.sound-toggle{
+  margin-left:auto;background:var(--panel2);border:1px solid var(--line);color:var(--muted);
+  border-radius:99px;padding:8px 14px;font-size:13px;font-weight:600;transition:all .2s;
+}
+.sound-toggle.on{color:var(--gold);border-color:var(--gold);box-shadow:0 0 10px rgba(201,162,75,.25)}
+nav{display:flex;gap:4px;max-width:1100px;margin:14px auto 0;overflow-x:auto}
+nav button{
+  background:none;border:none;border-bottom:3px solid transparent;color:var(--muted);
+  padding:10px 16px 12px;font-size:14px;font-weight:600;letter-spacing:.08em;
+  text-transform:uppercase;white-space:nowrap;transition:color .2s;
+}
+nav button:hover{color:var(--parchment)}
+nav button.active{color:var(--gold);border-bottom-color:var(--gold)}
+nav button:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+main{max-width:1100px;margin:0 auto;padding:22px 20px 80px;position:relative;z-index:1}
+.section-title{
+  font-family:'Cinzel',serif;font-weight:700;font-size:17px;letter-spacing:.12em;
+  color:var(--gold);text-transform:uppercase;margin:26px 0 12px;
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+}
+.section-title::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent);min-width:30px}
+
+/* ---------- Karten + Eintritts-Animation ---------- */
+.card{
+  background:var(--panel);border:1px solid var(--line);border-radius:6px;
+  padding:14px 16px;margin-bottom:12px;
+  animation:cardIn .45s cubic-bezier(.22,.9,.3,1) both;
+}
+.card:nth-child(2){animation-delay:.05s}.card:nth-child(3){animation-delay:.1s}
+.card:nth-child(4){animation-delay:.15s}.card:nth-child(5){animation-delay:.2s}
+@keyframes cardIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.card.clickable{transition:border-color .15s, transform .15s, box-shadow .15s}
+.card.clickable:hover{border-color:var(--gold);transform:translateY(-2px);cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.45)}
+.card.new-game{animation:newGame 1.2s ease both}
+@keyframes newGame{
+  0%{opacity:0;transform:scale(.96);box-shadow:0 0 0 rgba(201,162,75,0)}
+  40%{opacity:1;box-shadow:0 0 26px rgba(201,162,75,.5);border-color:var(--gold)}
+  100%{transform:scale(1);box-shadow:0 0 0 rgba(201,162,75,0)}
+}
+
+/* Signatur: Scoreboard im Stil der Ingame-HUD-Topbar */
+.scoreboard{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px}
+.sb-team{display:flex;flex-direction:column;gap:6px;min-width:0}
+.sb-team.right{align-items:flex-end}
+.sb-name{font-weight:700;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.sb-name.radiant{color:var(--radiant)} .sb-name.dire{color:var(--dire)}
+.heroes{display:flex;gap:3px}
+.heroes img{
+  width:42px;height:24px;object-fit:cover;border-radius:2px;
+  border:1px solid var(--line);background:var(--panel2);transition:transform .15s;
+}
+.heroes img:hover{transform:scale(1.6);z-index:5;position:relative;border-color:var(--gold)}
+.sb-mid{text-align:center;padding:0 8px}
+.sb-score{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:24px;letter-spacing:.05em}
+.sb-score .r{color:var(--radiant)} .sb-score .d{color:var(--dire)}
+.sb-score .pop{display:inline-block;animation:scorePop .6s cubic-bezier(.2,1.6,.4,1)}
+@keyframes scorePop{0%{transform:scale(1)}35%{transform:scale(1.7);text-shadow:0 0 14px currentColor}100%{transform:scale(1)}}
+.sb-clock{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);margin-top:2px}
+.series{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--gold);margin-top:3px}
+.goldbar{height:5px;border-radius:3px;background:var(--line);margin-top:10px;position:relative;overflow:hidden}
+.goldbar>div{position:absolute;top:0;bottom:0;transition:width .8s ease, background .4s}
+.goldlabel{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);margin-top:5px;text-align:center;transition:color .4s}
+
+.badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:3px;border:1px solid}
+.badge.live{color:#fff;background:var(--dota-red);border-color:var(--dota-red);animation:pulse 1.6s infinite}
+.badge.qual{color:var(--gold);border-color:var(--gold);background:rgba(201,162,75,.08)}
+.badge.main{color:var(--muted);border-color:var(--line)}
+.badge.tier-premium{color:var(--gold);border-color:var(--gold)}
+.badge.tier-professional{color:var(--parchment);border-color:var(--muted)}
+.badge.tier-amateur,.badge.tier-excluded{color:var(--muted);border-color:var(--line)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+
+.meta{color:var(--muted);font-size:12.5px;margin-top:8px;display:flex;gap:14px;flex-wrap:wrap}
+.meta b{color:var(--parchment);font-weight:600}
+
+/* ---------- Filter ---------- */
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+.filters select,.filters input{
+  background:var(--panel2);border:1px solid var(--line);color:var(--parchment);
+  padding:8px 10px;border-radius:4px;font-family:inherit;font-size:14px;
+}
+.filters input{min-width:200px}
+.chip{
+  background:none;border:1px solid var(--line);color:var(--muted);
+  padding:7px 14px;border-radius:99px;font-size:13px;font-weight:600;letter-spacing:.04em;
+  transition:all .15s;
+}
+.chip:hover{border-color:var(--muted);color:var(--parchment)}
+.chip.active{border-color:var(--gold);color:var(--gold);background:rgba(201,162,75,.08)}
+
+/* ---------- Liga-Gruppen ---------- */
+.league-group{margin-bottom:26px;animation:cardIn .4s ease both}
+.league-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding:8px 2px;border-bottom:1px solid var(--line);margin-bottom:10px}
+.league-head h3{font-family:'Cinzel',serif;font-size:15px;font-weight:700;letter-spacing:.06em}
+.match-row{
+  display:grid;grid-template-columns:1fr auto 1fr auto;gap:10px;align-items:center;
+  padding:9px 10px;border:1px solid var(--line);border-radius:4px;margin-bottom:6px;
+  background:var(--panel);transition:border-color .15s, background .15s;cursor:pointer;font-size:14.5px;
+}
+.match-row:hover{border-color:var(--gold);background:var(--panel2)}
+.match-row .t{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.match-row .t.win{color:var(--parchment)} .match-row .t.loss{color:var(--muted)}
+.match-row .t.right{text-align:right}
+.match-row .score{font-family:'JetBrains Mono',monospace;font-size:13px}
+.match-row .score .r{color:var(--radiant)} .match-row .score .d{color:var(--dire)}
+.match-row time{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted);text-align:right}
+
+/* ---------- Tabellen ---------- */
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line)}
+td{padding:6px 8px;border-bottom:1px solid rgba(44,37,53,.5)}
+td.num,th.num{text-align:right;font-family:'JetBrains Mono',monospace;font-size:12.5px}
+.player-cell{display:flex;align-items:center;gap:8px;min-width:0}
+.player-cell img{width:34px;height:19px;object-fit:cover;border-radius:2px;border:1px solid var(--line)}
+.player-cell .pn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+.player-cell .pro{color:var(--gold);font-weight:600}
+
+/* ---------- Modal ---------- */
+dialog{
+  background:var(--panel);color:var(--parchment);border:1px solid var(--gold);
+  border-radius:8px;max-width:920px;width:calc(100% - 32px);padding:0;
+}
+dialog[open]{animation:modalIn .25s ease}
+@keyframes modalIn{from{opacity:0;transform:translateY(18px) scale(.98)}to{opacity:1;transform:none}}
+dialog::backdrop{background:rgba(0,0,0,.7);backdrop-filter:blur(3px)}
+.modal-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.modal-head h2{font-family:'Cinzel',serif;font-size:16px;letter-spacing:.08em}
+.modal-body{padding:16px 18px;max-height:75vh;overflow-y:auto}
+.close-btn{background:none;border:1px solid var(--line);color:var(--muted);border-radius:4px;padding:6px 12px;font-size:13px}
+.close-btn:hover{color:var(--parchment);border-color:var(--muted)}
+canvas{width:100%;height:90px;display:block;margin:10px 0 4px}
+
+/* ---------- Statistiken ---------- */
+.statbar{display:flex;align-items:center;gap:10px;margin-bottom:7px;animation:cardIn .4s ease both}
+.statbar img{width:46px;height:26px;object-fit:cover;border-radius:2px;border:1px solid var(--line)}
+.statbar .bar{flex:1;height:18px;background:var(--panel2);border-radius:3px;overflow:hidden}
+.statbar .bar>div{height:100%;width:0;transition:width .9s cubic-bezier(.22,.9,.3,1)}
+.statbar .lbl{width:130px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.statbar .val{font-family:'JetBrains Mono',monospace;font-size:12px;width:92px;text-align:right;color:var(--muted)}
+
+/* ---------- Skeleton-Loader ---------- */
+.skeleton{border:1px solid var(--line);border-radius:6px;padding:16px;margin-bottom:12px;background:var(--panel)}
+.skeleton div{
+  height:14px;border-radius:3px;margin-bottom:10px;
+  background:linear-gradient(90deg,var(--panel2) 25%,#262031 50%,var(--panel2) 75%);
+  background-size:200% 100%;animation:shimmer 1.4s infinite;
+}
+.skeleton div:last-child{margin-bottom:0;width:60%}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+.empty,.error{text-align:center;color:var(--muted);padding:40px 16px;border:1px dashed var(--line);border-radius:6px;font-size:14px}
+.error{color:var(--dire);border-color:var(--dire)}
+.refresh-note{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted);text-transform:none;letter-spacing:0}
+footer{max-width:1100px;margin:0 auto;padding:0 20px 30px;color:var(--muted);font-size:12px;line-height:1.6;position:relative;z-index:1}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation:none !important;transition:none !important}
+}
+@media (max-width:640px){
+  .heroes img{width:32px;height:18px}
+  .sb-score{font-size:19px}
+  .match-row{grid-template-columns:1fr auto 1fr}
+  .match-row time{display:none}
+  .player-cell .pn{max-width:90px}
+  .sound-toggle{padding:8px 10px}
+}
+</style>
+</head>
+<body>
+
+<div class="embers" id="embers" aria-hidden="true"></div>
+
+<header>
+  <div class="brand">
+    <svg width="44" height="48" viewBox="0 0 44 48" aria-hidden="true">
+      <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#e3c878"/><stop offset="1" stop-color="#9a7728"/>
+      </linearGradient></defs>
+      <path d="M22 1 L41 8 V24 C41 36 33 43 22 47 C11 43 3 36 3 24 V8 Z" fill="#16121c" stroke="url(#g)" stroke-width="2"/>
+      <circle cx="22" cy="22" r="9" fill="none" stroke="url(#g)" stroke-width="2"/>
+      <path d="M22 9 V14 M22 30 V35 M9 22 H14 M30 22 H35" stroke="url(#g)" stroke-width="2"/>
+      <circle cx="22" cy="22" r="3" fill="#a32c25"/>
+    </svg>
+    <div>
+      <h1>AEGIS <em>TICKER</em></h1>
+      <p>Dota 2 Pro-Szene · Live, Ergebnisse & Statistiken über die Steam Web API</p>
+    </div>
+    <button class="sound-toggle" id="soundBtn" aria-pressed="false" title="Sound an/aus">🔇 Sound</button>
+  </div>
+  <nav role="tablist">
+    <button class="active" data-tab="live">⬤ Live</button>
+    <button data-tab="matches">Spiele</button>
+    <button data-tab="leagues">Ligen</button>
+    <button data-tab="stats">Statistiken</button>
+  </nav>
+</header>
+
+<main>
+  <section id="tab-live"></section>
+  <section id="tab-matches" hidden></section>
+  <section id="tab-leagues" hidden></section>
+  <section id="tab-stats" hidden></section>
+</main>
+
+<footer>
+  Datenquelle: Steam Web API (Valve), ergänzt durch OpenDota. Alle Anfragen laufen über den eigenen
+  Server-Cache — die APIs werden geschont. Hero-Grafiken vom offiziellen Steam-CDN.
+  Geplante, noch nicht gestartete Serien veröffentlicht Steam nicht über die API; sobald ein Liga-Spiel
+  beginnt, erscheint es automatisch im Live-Tab.
+</footer>
+
+<dialog id="matchModal">
+  <div class="modal-head">
+    <h2 id="modalTitle">Match</h2>
+    <button class="close-btn" onclick="document.getElementById('matchModal').close()">Schließen ✕</button>
+  </div>
+  <div class="modal-body" id="modalBody"></div>
+</dialog>
+
+<script>
+"use strict";
+const API = "/api";
+const CDN = "https://cdn.cloudflare.steamstatic.com";
+
+/* ============================================================
+   SOUND-ENGINE — alles synthetisch per Web Audio API,
+   keine Audiodateien nötig.
+============================================================ */
+const Sound = {
+  ctx: null, enabled: false,
+  init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+  toggle() {
+    this.init();
+    this.enabled = !this.enabled;
+    if (this.enabled && this.ctx.state === "suspended") this.ctx.resume();
+    const b = document.getElementById("soundBtn");
+    b.textContent = this.enabled ? "🔊 Sound" : "🔇 Sound";
+    b.classList.toggle("on", this.enabled);
+    b.setAttribute("aria-pressed", this.enabled);
+    if (this.enabled) this.click();
+  },
+  env(gainNode, t0, attack, decay, peak = 0.2) {
+    const g = gainNode.gain;
+    g.setValueAtTime(0.0001, t0);
+    g.exponentialRampToValueAtTime(peak, t0 + attack);
+    g.exponentialRampToValueAtTime(0.0001, t0 + attack + decay);
+  },
+  tone({ type = "sine", freq = 440, freqEnd, attack = .005, decay = .12, peak = .15, delay = 0 }) {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.ctx.currentTime + delay;
+    const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t0);
+    if (freqEnd) o.frequency.exponentialRampToValueAtTime(freqEnd, t0 + attack + decay);
+    this.env(g, t0, attack, decay, peak);
+    o.connect(g).connect(this.ctx.destination);
+    o.start(t0); o.stop(t0 + attack + decay + .05);
+  },
+  noise({ decay = .25, peak = .12, delay = 0, lowpass = 1200 }) {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.ctx.currentTime + delay;
+    const len = this.ctx.sampleRate * (decay + .05);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = this.ctx.createBufferSource(); src.buffer = buf;
+    const f = this.ctx.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = lowpass;
+    const g = this.ctx.createGain();
+    this.env(g, t0, .01, decay, peak);
+    src.connect(f).connect(g).connect(this.ctx.destination);
+    src.start(t0);
+  },
+  /* UI-Klick */
+  click() { this.tone({ type: "triangle", freq: 720, freqEnd: 540, decay: .06, peak: .08 }); },
+  /* Kill: kurzer metallischer Doppelschlag */
+  kill() {
+    this.tone({ type: "square", freq: 220, freqEnd: 110, decay: .1, peak: .1 });
+    this.noise({ decay: .12, peak: .07, lowpass: 2500 });
+  },
+  /* Neues Live-Spiel: Kriegshorn (drei steigende Sägezahn-Töne) */
+  horn() {
+    [196, 262, 392].forEach((f, i) =>
+      this.tone({ type: "sawtooth", freq: f * .98, freqEnd: f, attack: .06, decay: .5, peak: .12, delay: i * .18 }));
+    this.noise({ decay: .7, peak: .04, lowpass: 600, delay: .1 });
+  },
+  /* Gold-Führung wechselt die Seite: Whoosh */
+  whoosh() {
+    this.noise({ decay: .4, peak: .1, lowpass: 900 });
+    this.tone({ type: "sine", freq: 180, freqEnd: 520, attack: .05, decay: .3, peak: .06 });
+  },
+};
+document.getElementById("soundBtn").addEventListener("click", () => Sound.toggle());
+document.addEventListener("click", e => {
+  if (Sound.enabled && e.target.closest(".chip, nav button, .match-row, .card.clickable")) Sound.click();
+}, true);
+
+/* ---------- Glut-Partikel erzeugen ---------- */
+(function embers() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const wrap = document.getElementById("embers");
+  for (let i = 0; i < 22; i++) {
+    const s = document.createElement("span");
+    s.style.left = Math.random() * 100 + "%";
+    s.style.setProperty("--drift", (Math.random() * 80 - 40) + "px");
+    s.style.animationDuration = 9 + Math.random() * 14 + "s";
+    s.style.animationDelay = -Math.random() * 20 + "s";
+    s.style.opacity = 0;
+    if (Math.random() < .3) s.style.background = "var(--dota-red)";
+    wrap.appendChild(s);
+  }
+})();
+
+/* ============================================================
+   Zustand, Helfer
+============================================================ */
+const S = {
+  heroes: null, proPlayers: null, heroStats: null,
+  proMatches: [], leagues: null, liveTimer: null, matchCache: {},
+  matchFilter: { kind: "alle", league: "", search: "" },
+  prevLive: {}, // match_id -> { score, leadSign } für Sound/Animation-Trigger
+};
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* TESTVERSION ohne Server: spricht OpenDota direkt an.
+   Die finale Worker-Version nutzt stattdessen den eigenen Cache-Proxy. */
+const OD = "https://api.opendota.com/api";
+async function od(path) {
+  const r = await fetch(OD + path);
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+const heroImageFromName = n =>
+  `${CDN}/apps/dota2/images/dota_react/heroes/${String(n).replace("npc_dota_hero_", "")}.png`;
+async function api(path) {
+  if (path === "/heroes") {
+    const j = await od("/heroes");
+    return j.map(h => ({ id: h.id, localized_name: h.localized_name, img: heroImageFromName(h.name) }));
+  }
+  if (path === "/live") {
+    const j = await od("/live");
+    return { source: "opendota", league: j.filter(g => g.league_id), pub: j.filter(g => !g.league_id).slice(0, 6) };
+  }
+  if (path === "/proMatches") {
+    const p1 = await od("/proMatches");
+    try {
+      const minId = Math.min(...p1.map(m => m.match_id));
+      return p1.concat(await od("/proMatches?less_than_match_id=" + minId));
+    } catch { return p1; }
+  }
+  if (path === "/proPlayers") {
+    const j = await od("/proPlayers");
+    const map = {}; for (const p of j) map[p.account_id] = p.name;
+    return map;
+  }
+  if (path.startsWith("/match/")) return od("/matches/" + path.slice(7));
+  if (path === "/leagues") return od("/leagues");
+  if (path === "/heroStats") return od("/heroStats");
+  throw new Error("Unbekannter Endpunkt");
+}
+const fmtClock = sec => {
+  if (sec == null) return "–";
+  const neg = sec < 0; sec = Math.abs(Math.round(sec));
+  return (neg ? "-" : "") + Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
+};
+const fmtDate = ts => new Date(ts * 1000).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const fmtGold = n => { const a = Math.abs(n); return a >= 1000 ? (a / 1000).toFixed(1) + "k" : String(a); };
+const isQualifier = name => /quali|qualifier|open\s*#|closed/i.test(name || "");
+const imgUrl = img => img?.startsWith("http") ? img : CDN + img;
+function heroImg(id) {
+  const h = S.heroes && S.heroes[id];
+  return h ? `<img src="${imgUrl(h.img)}" alt="${esc(h.name)}" title="${esc(h.name)}" loading="lazy">` : "";
+}
+function playerName(p) {
+  const pro = S.proPlayers && p.account_id && S.proPlayers[p.account_id];
+  if (pro) return { name: pro, pro: true };
+  return { name: p.name || p.personaname || "Anonym", pro: false };
+}
+const skeletons = n => Array.from({ length: n }, () =>
+  `<div class="skeleton"><div></div><div></div><div></div></div>`).join("");
+
+async function loadHeroes() {
+  if (S.heroes) return;
+  const list = await api("/heroes");
+  S.heroes = {};
+  for (const h of list) S.heroes[h.id] = { name: h.localized_name, img: h.img };
+}
+async function loadProPlayers() {
+  if (S.proPlayers) return;
+  try { S.proPlayers = await api("/proPlayers"); } catch { S.proPlayers = {}; }
+}
+
+/* ---------- Tabs ---------- */
+document.querySelectorAll("nav button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b === btn));
+    document.querySelectorAll("main section").forEach(s => s.hidden = true);
+    const tab = btn.dataset.tab;
+    $("#tab-" + tab).hidden = false;
+    if (tab === "live") initLive(); else stopLive();
+    if (tab === "matches") initMatches();
+    if (tab === "leagues") initLeagues();
+    if (tab === "stats") initStats();
+  });
+});
+
+/* ============================================================
+   LIVE-TICKER
+============================================================ */
+let liveLoaded = false;
+function stopLive() { clearInterval(S.liveTimer); S.liveTimer = null; }
+async function initLive() {
+  stopLive();
+  await renderLive();
+  S.liveTimer = setInterval(renderLive, 30000);
+}
+
+async function renderLive() {
+  const el = $("#tab-live");
+  if (!liveLoaded) el.innerHTML = `<div class="section-title">Liga-Spiele live</div>` + skeletons(2);
+  try {
+    await Promise.all([loadHeroes(), loadProPlayers()]);
+    const data = await api("/live");
+    liveLoaded = true;
+    const league = data.league || [];
+    const pub = data.pub || [];
+
+    let html = `<div class="section-title">Liga-Spiele live
+      <span class="refresh-note">Quelle: ${data.source === "steam" ? "Steam Web API" : "OpenDota"} · Auto-Refresh 30 s · ${new Date().toLocaleTimeString("de-DE")}</span></div>`;
+    html += league.length
+      ? league.map(liveCard).join("")
+      : `<div class="empty">Gerade läuft kein offizielles Liga-Spiel.<br>Sobald ein Turnier- oder Qualifier-Match startet, erscheint es hier automatisch — mit Hornsignal, wenn der Sound an ist.</div>`;
+    if (pub.length) html += `<div class="section-title">Top-Ranked-Lobbys (Immortal)</div>` + pub.map(liveCard).join("");
+    el.innerHTML = html;
+    el.querySelectorAll("[data-match]").forEach(c =>
+      c.addEventListener("click", () => openMatch(c.dataset.match, true)));
+
+    // Sound-Trigger nach dem Rendern auswerten
+    triggerLiveEffects(league.concat(pub));
+  } catch (e) {
+    el.innerHTML = `<div class="error">Live-Daten konnten nicht geladen werden (${esc(e.message)}). Nächster Versuch in 30 s.</div>`;
+  }
+}
+
+function triggerLiveEffects(games) {
+  const seen = {};
+  for (const g of games) {
+    const id = g.match_id;
+    const score = (g.radiant_score || 0) + (g.dire_score || 0);
+    const leadSign = Math.sign(g.radiant_lead || 0);
+    const prev = S.prevLive[id];
+    if (!prev) {
+      if (Object.keys(S.prevLive).length) { // nicht beim allerersten Laden tröten
+        Sound.horn();
+        document.querySelector(`[data-match="${id}"]`)?.classList.add("new-game");
+      }
+    } else {
+      if (score > prev.score) Sound.kill();
+      if (prev.leadSign && leadSign && leadSign !== prev.leadSign) Sound.whoosh();
+    }
+    seen[id] = { score, leadSign };
+  }
+  S.prevLive = seen;
+}
+
+function liveCard(g) {
+  const rad = (g.players || []).filter(p => p.team === 0);
+  const dire = (g.players || []).filter(p => p.team === 1);
+  const lead = g.radiant_lead || 0;
+  const pct = Math.min(Math.abs(lead) / 20000, 1) * 50;
+  const prev = S.prevLive[g.match_id];
+  const popR = prev && g.radiant_score > (prev.scoreR ?? -1) ? "" : ""; // Score-Pop unten generisch
+  const scoreChanged = prev && (g.radiant_score + g.dire_score) > prev.score;
+  const proNames = ps => ps.map(playerName).filter(x => x.pro).map(x => esc(x.name)).join(", ");
+  const series = g.series_type
+    ? `Bo${g.series_type === 1 ? 3 : g.series_type === 2 ? 5 : 2} · Serie ${g.radiant_series_wins}:${g.dire_series_wins}` : "";
+
+  return `<div class="card clickable" data-match="${g.match_id}">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+      <span class="badge live">Live</span>
+      ${g.league_id ? `<span class="badge main">Liga-ID ${g.league_id}</span>` : ""}
+      <span class="refresh-note">${g.average_mmr ? "Ø MMR " + g.average_mmr + " · " : ""}${g.spectators || 0} Zuschauer</span>
+    </div>
+    <div class="scoreboard">
+      <div class="sb-team">
+        <div class="sb-name radiant">${esc(g.team_name_radiant || "Radiant")}</div>
+        <div class="heroes">${rad.map(p => heroImg(p.hero_id)).join("")}</div>
+      </div>
+      <div class="sb-mid">
+        <div class="sb-score"><span class="r ${scoreChanged ? "pop" : ""}">${g.radiant_score ?? 0}</span> : <span class="d ${scoreChanged ? "pop" : ""}">${g.dire_score ?? 0}</span></div>
+        <div class="sb-clock">${fmtClock(g.game_time)}</div>
+        ${series ? `<div class="series">${series}</div>` : ""}
+      </div>
+      <div class="sb-team right">
+        <div class="sb-name dire">${esc(g.team_name_dire || "Dire")}</div>
+        <div class="heroes">${dire.map(p => heroImg(p.hero_id)).join("")}</div>
+      </div>
+    </div>
+    <div class="goldbar"><div style="${lead >= 0
+      ? `right:50%;width:${pct}%;background:var(--radiant)`
+      : `left:50%;width:${pct}%;background:var(--dire)`}"></div></div>
+    <div class="goldlabel" style="color:${lead === 0 ? "" : lead > 0 ? "var(--radiant)" : "var(--dire)"}">
+      ${lead === 0 ? "Gold ausgeglichen" : (lead > 0 ? "Radiant" : "Dire") + " führt mit " + fmtGold(lead) + " Gold"}</div>
+    ${proNames(rad) || proNames(dire) ? `<div class="meta">
+      ${proNames(rad) ? `<span>☀ <b>${proNames(rad)}</b></span>` : ""}
+      ${proNames(dire) ? `<span>🌙 <b>${proNames(dire)}</b></span>` : ""}</div>` : ""}
+  </div>`;
+}
+
+/* ============================================================
+   VERGANGENE SPIELE — nach Liga & Qualifier
+============================================================ */
+let matchesLoaded = false;
+async function initMatches() {
+  if (matchesLoaded) return;
+  const el = $("#tab-matches");
+  el.innerHTML = skeletons(4);
+  try {
+    await loadHeroes();
+    S.proMatches = await api("/proMatches");
+    matchesLoaded = true;
+    renderMatchFilters();
+    renderMatchList();
+  } catch (e) {
+    el.innerHTML = `<div class="error">Matches konnten nicht geladen werden (${esc(e.message)}).</div>`;
+  }
+}
+
+function renderMatchFilters() {
+  const el = $("#tab-matches");
+  const leagues = [...new Set(S.proMatches.map(m => m.league_name).filter(Boolean))].sort();
+  el.innerHTML = `
+    <div class="filters">
+      <button class="chip ${S.matchFilter.kind === "alle" ? "active" : ""}" data-kind="alle">Alle</button>
+      <button class="chip ${S.matchFilter.kind === "haupt" ? "active" : ""}" data-kind="haupt">Hauptevents</button>
+      <button class="chip ${S.matchFilter.kind === "quali" ? "active" : ""}" data-kind="quali">Qualifier</button>
+      <select id="leagueSel">
+        <option value="">Alle Ligen (${leagues.length})</option>
+        ${leagues.map(l => `<option ${l === S.matchFilter.league ? "selected" : ""}>${esc(l)}</option>`).join("")}
+      </select>
+      <input id="teamSearch" type="search" placeholder="Team suchen …" value="${esc(S.matchFilter.search)}">
+    </div>
+    <div id="matchList"></div>`;
+  el.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => {
+    S.matchFilter.kind = c.dataset.kind; renderMatchFilters(); renderMatchList();
+  }));
+  $("#leagueSel").addEventListener("change", e => { S.matchFilter.league = e.target.value; renderMatchList(); });
+  $("#teamSearch").addEventListener("input", e => { S.matchFilter.search = e.target.value; renderMatchList(); });
+}
+
+function renderMatchList() {
+  const f = S.matchFilter;
+  let list = S.proMatches;
+  if (f.kind === "quali") list = list.filter(m => isQualifier(m.league_name));
+  if (f.kind === "haupt") list = list.filter(m => !isQualifier(m.league_name));
+  if (f.league) list = list.filter(m => m.league_name === f.league);
+  if (f.search) {
+    const q = f.search.toLowerCase();
+    list = list.filter(m => (m.radiant_name || "").toLowerCase().includes(q) || (m.dire_name || "").toLowerCase().includes(q));
+  }
+  const groups = new Map();
+  for (const m of list) {
+    const key = m.league_name || "Unbenannte Liga";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(m);
+  }
+  const sorted = [...groups.entries()].sort((a, b) => b[1][0].start_time - a[1][0].start_time);
+
+  $("#matchList").innerHTML = !sorted.length
+    ? `<div class="empty">Keine Spiele für diesen Filter gefunden.</div>`
+    : sorted.map(([league, ms]) => `
+      <div class="league-group">
+        <div class="league-head">
+          <h3>${esc(league)}</h3>
+          <span class="badge ${isQualifier(league) ? "qual" : "main"}">${isQualifier(league) ? "Qualifier" : "Hauptevent"}</span>
+          <span class="refresh-note">${ms.length} Spiele</span>
+        </div>
+        ${ms.map(matchRow).join("")}
+      </div>`).join("");
+
+  document.querySelectorAll(".match-row").forEach(r =>
+    r.addEventListener("click", () => openMatch(r.dataset.match, false)));
+}
+
+function matchRow(m) {
+  const rw = m.radiant_win;
+  return `<div class="match-row" data-match="${m.match_id}" role="button" tabindex="0">
+    <span class="t ${rw ? "win" : "loss"}">${rw ? "🏆 " : ""}${esc(m.radiant_name || "Radiant")}</span>
+    <span class="score"><span class="r">${m.radiant_score}</span> : <span class="d">${m.dire_score}</span></span>
+    <span class="t right ${!rw ? "win" : "loss"}">${esc(m.dire_name || "Dire")}${!rw ? " 🏆" : ""}</span>
+    <time>${fmtDate(m.start_time)} · ${fmtClock(m.duration)}</time>
+  </div>`;
+}
+
+/* ============================================================
+   MATCH-DETAIL
+============================================================ */
+async function openMatch(id, isLive) {
+  const dlg = $("#matchModal");
+  $("#modalTitle").textContent = "Match " + id;
+  $("#modalBody").innerHTML = skeletons(3);
+  dlg.showModal();
+  try {
+    await Promise.all([loadHeroes(), loadProPlayers()]);
+    let m = S.matchCache[id];
+    if (!m) { m = await api("/match/" + id); S.matchCache[id] = m; }
+    if (!m.players || !m.players.length) throw new Error("noch keine Daten");
+    $("#modalTitle").textContent = `${m.radiant_name || "Radiant"} ${m.radiant_score} : ${m.dire_score} ${m.dire_name || "Dire"}`;
+    $("#modalBody").innerHTML = matchDetail(m);
+    drawGoldGraph(m);
+  } catch (e) {
+    $("#modalBody").innerHTML = `<div class="empty">${isLive
+      ? "Für laufende Spiele liefert Steam die vollständige Statistik erst nach Spielende."
+      : "Match-Daten konnten nicht geladen werden (" + esc(e.message) + ")."}</div>`;
+  }
+}
+
+function matchDetail(m) {
+  const side = isRad => m.players.filter(p => p.isRadiant === isRad || (p.player_slot < 128) === isRad);
+  const table = (ps, label) => `
+    <div class="section-title" style="margin-top:18px">${label}</div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Spieler</th><th class="num">K</th><th class="num">D</th><th class="num">A</th>
+      <th class="num">GPM</th><th class="num">XPM</th><th class="num">LH</th><th class="num">Netto-Gold</th><th class="num">Heldenschaden</th></tr></thead>
+      <tbody>${ps.map(p => {
+        const n = playerName(p);
+        return `<tr>
+          <td><span class="player-cell">${heroImg(p.hero_id)}
+            <span class="pn ${n.pro ? "pro" : ""}">${esc(n.name)}</span></span></td>
+          <td class="num">${p.kills}</td><td class="num">${p.deaths}</td><td class="num">${p.assists}</td>
+          <td class="num">${p.gold_per_min}</td><td class="num">${p.xp_per_min}</td>
+          <td class="num">${p.last_hits}</td><td class="num">${fmtGold(p.net_worth || p.total_gold || 0)}</td>
+          <td class="num">${fmtGold(p.hero_damage || 0)}</td></tr>`;
+      }).join("")}</tbody></table></div>`;
+
+  return `
+    <div class="meta" style="margin-top:0">
+      <span>Liga: <b>${esc(m.league?.name || "—")}</b>
+        ${isQualifier(m.league?.name) ? ' <span class="badge qual">Qualifier</span>' : ""}</span>
+      <span>Dauer: <b>${fmtClock(m.duration)}</b></span>
+      <span>Datum: <b>${fmtDate(m.start_time)}</b></span>
+      <span>Sieger: <b style="color:${m.radiant_win ? "var(--radiant)" : "var(--dire)"}">
+        ${esc(m.radiant_win ? (m.radiant_name || "Radiant") : (m.dire_name || "Dire"))}</b></span>
+      <span class="refresh-note">Quelle: ${m.source === "steam" ? "Steam Web API" : "OpenDota"}</span>
+    </div>
+    ${m.radiant_gold_adv && m.radiant_gold_adv.length > 2 ? `
+      <div class="section-title" style="margin-top:16px">Gold-Verlauf</div>
+      <canvas id="goldCanvas" width="860" height="90"></canvas>
+      <div class="goldlabel">grün = Radiant-Führung · rot = Dire-Führung (pro Minute)</div>` : ""}
+    ${table(side(true), `☀ ${esc(m.radiant_name || "Radiant")}`)}
+    ${table(side(false), `🌙 ${esc(m.dire_name || "Dire")}`)}`;
+}
+
+function drawGoldGraph(m) {
+  const cv = document.getElementById("goldCanvas");
+  if (!cv || !m.radiant_gold_adv) return;
+  const ctx = cv.getContext("2d");
+  const data = m.radiant_gold_adv;
+  const max = Math.max(1, ...data.map(v => Math.abs(v)));
+  const W = cv.width, H = cv.height, mid = H / 2;
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let frame = 0;
+  const total = reduced ? 1 : 30;
+  (function step() {
+    frame++;
+    const upto = Math.ceil(data.length * (frame / total));
+    ctx.clearRect(0, 0, W, H);
+    ctx.strokeStyle = "#2c2535"; ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(W, mid); ctx.stroke();
+    for (let i = 0; i < upto && i < data.length; i++) {
+      const x = (i / (data.length - 1)) * W;
+      const h = (data[i] / max) * (mid - 6);
+      ctx.fillStyle = data[i] >= 0 ? "#5dbb63" : "#e05246";
+      ctx.fillRect(x, h >= 0 ? mid - h : mid, Math.max(W / data.length - 1, 1), Math.abs(h));
+    }
+    if (frame < total) requestAnimationFrame(step);
+  })();
+}
+
+/* ============================================================
+   LIGEN
+============================================================ */
+let leaguesLoaded = false;
+async function initLeagues() {
+  if (leaguesLoaded) return;
+  const el = $("#tab-leagues");
+  el.innerHTML = skeletons(4);
+  try {
+    const list = await api("/leagues");
+    S.leagues = list.filter(l => l.name).reverse();
+    leaguesLoaded = true;
+    renderLeagues("premium", "");
+  } catch (e) {
+    el.innerHTML = `<div class="error">Ligen konnten nicht geladen werden (${esc(e.message)}).</div>`;
+  }
+}
+
+function renderLeagues(tier, search) {
+  const el = $("#tab-leagues");
+  let list = S.leagues;
+  if (tier !== "alle") list = list.filter(l => l.tier === tier);
+  if (search) list = list.filter(l => l.name.toLowerCase().includes(search.toLowerCase()));
+  const tiers = ["premium", "professional", "alle"];
+  el.innerHTML = `
+    <div class="filters">
+      ${tiers.map(t => `<button class="chip ${t === tier ? "active" : ""}" data-tier="${t}">
+        ${t === "premium" ? "Premium (Tier 1)" : t === "professional" ? "Professional" : "Alle"}</button>`).join("")}
+      <input id="leagueSearch" type="search" placeholder="Liga suchen …" value="${esc(search)}">
+      <span class="refresh-note">${list.length} Ligen</span>
+    </div>
+    ${list.slice(0, 120).map(l => `
+      <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <div>
+          <b>${esc(l.name)}</b>
+          <div class="meta" style="margin-top:4px">
+            <span class="badge tier-${esc(l.tier || "excluded")}">${esc(l.tier || "unbekannt")}</span>
+            ${isQualifier(l.name) ? '<span class="badge qual">Qualifier</span>' : ""}
+          </div>
+        </div>
+        <button class="chip" data-league="${esc(l.name)}">Spiele anzeigen →</button>
+      </div>`).join("") || `<div class="empty">Keine Ligen für diesen Filter.</div>`}`;
+
+  el.querySelectorAll("[data-tier]").forEach(b =>
+    b.addEventListener("click", () => renderLeagues(b.dataset.tier, $("#leagueSearch").value)));
+  $("#leagueSearch").addEventListener("input", e => renderLeagues(tier, e.target.value));
+  el.querySelectorAll("[data-league]").forEach(b => b.addEventListener("click", async () => {
+    S.matchFilter = { kind: "alle", league: b.dataset.league, search: "" };
+    document.querySelector('nav button[data-tab="matches"]').click();
+    await initMatches();
+    renderMatchFilters(); renderMatchList();
+  }));
+}
+
+/* ============================================================
+   STATISTIKEN — Pro-Meta
+============================================================ */
+let statsLoaded = false;
+async function initStats() {
+  if (statsLoaded) return;
+  const el = $("#tab-stats");
+  el.innerHTML = skeletons(5);
+  try {
+    await loadHeroes();
+    S.heroStats = await api("/heroStats");
+    statsLoaded = true;
+    renderStats("pick");
+  } catch (e) {
+    el.innerHTML = `<div class="error">Statistiken konnten nicht geladen werden (${esc(e.message)}).</div>`;
+  }
+}
+
+function renderStats(mode) {
+  const el = $("#tab-stats");
+  const hs = S.heroStats.filter(h => h.pro_pick > 0);
+  let list, color, label;
+  if (mode === "pick") {
+    list = [...hs].sort((a, b) => b.pro_pick - a.pro_pick).slice(0, 20);
+    color = "var(--gold)"; label = h => `${h.pro_pick} Picks`;
+  } else if (mode === "ban") {
+    list = [...hs].sort((a, b) => (b.pro_ban || 0) - (a.pro_ban || 0)).slice(0, 20);
+    color = "var(--dire)"; label = h => `${h.pro_ban || 0} Bans`;
+  } else {
+    list = hs.filter(h => h.pro_pick >= 20)
+      .sort((a, b) => b.pro_win / b.pro_pick - a.pro_win / a.pro_pick).slice(0, 20);
+    color = "var(--radiant)"; label = h => (100 * h.pro_win / h.pro_pick).toFixed(1) + " % WR";
+  }
+  const maxV = mode === "win" ? 1 : Math.max(...list.map(h => mode === "pick" ? h.pro_pick : h.pro_ban || 0));
+
+  el.innerHTML = `
+    <div class="filters">
+      <button class="chip ${mode === "pick" ? "active" : ""}" data-m="pick">Meist gepickt</button>
+      <button class="chip ${mode === "ban" ? "active" : ""}" data-m="ban">Meist gebannt</button>
+      <button class="chip ${mode === "win" ? "active" : ""}" data-m="win">Beste Winrate (≥ 20 Spiele)</button>
+    </div>
+    <div class="section-title">Pro-Meta der aktuellen Patch-Periode</div>
+    ${list.map((h, i) => {
+      const v = mode === "win" ? h.pro_win / h.pro_pick : (mode === "pick" ? h.pro_pick : h.pro_ban || 0);
+      return `<div class="statbar" style="animation-delay:${i * 30}ms">
+        <img src="${imgUrl(h.img)}" alt="" loading="lazy">
+        <span class="lbl">${esc(h.localized_name)}</span>
+        <span class="bar"><div data-w="${(v / maxV) * 100}" style="background:${color}"></div></span>
+        <span class="val">${label(h)}</span>
+      </div>`;
+    }).join("")}`;
+  // Balken animiert einlaufen lassen
+  requestAnimationFrame(() => el.querySelectorAll(".bar > div").forEach(d => d.style.width = d.dataset.w + "%"));
+  el.querySelectorAll("[data-m]").forEach(b => b.addEventListener("click", () => renderStats(b.dataset.m)));
+}
+
+document.addEventListener("keydown", e => {
+  if (e.key === "Enter" && document.activeElement?.classList.contains("match-row"))
+    document.activeElement.click();
+});
+
+initLive();
+</script>
+</body>
+</html>

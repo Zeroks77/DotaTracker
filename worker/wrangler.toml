@@ -1,0 +1,8 @@
+# Nur nötig, wenn du per CLI deployen willst (npx wrangler deploy).
+# Für das Dashboard-Deployment (Copy & Paste) brauchst du diese Datei nicht.
+name = "aegis-ticker"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# Optionalen Steam-Key NICHT hier eintragen, sondern als Secret:
+#   npx wrangler secret put STEAM_API_KEY
