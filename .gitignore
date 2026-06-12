@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Lokale Secrets / Env-Dateien — NIE committen
+.env
+.env.*
+.dev.vars
+
+# Wrangler / Cloudflare
+.wrangler/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
